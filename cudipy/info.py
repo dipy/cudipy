@@ -85,7 +85,7 @@ SCIPY_MIN_VERSION = '1.0'
 DIPY_MIN_VERSION = '1.2.0'
 
 # Main setup parameters
-NAME                = 'cuDipy'
+NAME                = 'cudipy'
 MAINTAINER          = "Gregory R. Lee"
 MAINTAINER_EMAIL    = "neuroimaging@python.org"
 DESCRIPTION         = description

@@ -24,7 +24,7 @@ dist/
 .project
 .pydevproject
 *.sw[po]
-dipy.egg-info/
+cudipy.egg-info/
 nibabel*egg/
 pyx-stamps
 __config__.py
@@ -32,7 +32,7 @@ __config__.py
 .coverage
 .buildbot.patch
 .eggs/
-dipy/.idea/
+cudipy/.idea/
 .idea
 .vscode
 .pytest_cache/*
