@@ -31,3 +31,8 @@ Requirements
 ============
 NumPy >= 1.15
 CuPy >= 8.0
+cupyimg
+
+cupyimg should be installed after CuPy via::
+
+    pip install git+https://github.com/mritools/cupyimg

@@ -1,5 +1,5 @@
 # Check against .travis.yml file and cudipy/info.py
-cupy>=8.0.0
+cupy>=7.8.0
 dipy>=1.2.0
 nibabel>=3.0.0
 numpy>=1.12.0

@@ -78,7 +78,7 @@ cuDIPY uses other libraries also licensed under the BSD or the MIT licenses.
 
 # versions for dependencies
 # Check these versions against .travis.yml and requirements.txt
-CUPY_MIN_VERSION = '8.0'
+CUPY_MIN_VERSION = '7.8.0'
 NIBABEL_MIN_VERSION = '3.0.0'
 NUMPY_MIN_VERSION = '1.12.0'
 SCIPY_MIN_VERSION = '1.0'
