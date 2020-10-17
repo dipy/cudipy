@@ -129,11 +129,16 @@ def add_noise(signal, snr, S0, noise_type="rician"):
         "rayleigh": _add_rayleigh,
     }
 
+    # ensure single precision output for single precision inputs
+    float_dtype = xp.promote_types(signal.dtype, np.float32)
+
     noise1 = xp.random.normal(0, sigma, size=signal.shape)
+    noise1 = noise1.astype(float_dtype, copy=False)
 
     if noise_type == "gaussian":
         noise2 = None
     else:
         noise2 = xp.random.normal(0, sigma, size=signal.shape)
+        noise2 = noise2.astype(float_dtype, copy=False)
 
     return noise_adder[noise_type](signal, noise1, noise2)

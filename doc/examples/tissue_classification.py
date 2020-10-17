@@ -86,7 +86,7 @@ t0 = time.time()
 hmrf = TissueClassifierHMRF()
 t1_gpu = cp.asarray(t1)
 initial_segmentation, final_segmentation, PVE = hmrf.classify(
-    t1_gpu, nclass, beta,
+    t1_gpu, nclass, beta, #max_iter=20,
 )
 
 t1 = time.time()

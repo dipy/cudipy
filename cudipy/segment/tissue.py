@@ -7,6 +7,11 @@ from cudipy.segment.mrf import (
 from cudipy.sims.voxel import add_noise
 from cudipy._utils import get_array_module
 
+"""
+The following two functions account for the majority of the computation time
+    icm.icm_ising
+    icm.prob_neighborhood
+"""
 
 class TissueClassifierHMRF(object):
     r"""
@@ -78,19 +83,19 @@ class TissueClassifierHMRF(object):
         p = xp.argsort(mu)
         mu = mu[p]
         sigmasq = sigmasq[p]
-        print(f"sigmasq.shape = {sigmasq.shape}")
 
         neglogl = com.negloglikelihood(image, mu, sigmasq, nclasses)
-        seg_init = icm.initialize_maximum_likelihood(neglogl)
 
-        mu, sigmasq = com.seg_stats(image, seg_init, nclasses)
+        seg = icm.initialize_maximum_likelihood(neglogl)
+
+        mu, sigmasq = com.seg_stats(image, seg, nclasses)
 
         zero = xp.zeros_like(image) + 0.001
         zero_noise = add_noise(zero, 10000, 1, noise_type="gaussian")
         image_gauss = xp.where(image == 0, zero_noise, image)
 
         final_segmentation = xp.empty_like(image)
-        initial_segmentation = seg_init.copy()
+        initial_segmentation = seg
 
         allow_break = max_iter is None or tolerance is not None
 
@@ -105,7 +110,7 @@ class TissueClassifierHMRF(object):
             if self.verbose:
                 print(">> Iteration: " + str(i))
 
-            PLN = icm.prob_neighborhood(seg_init, beta, nclasses)
+            PLN = icm.prob_neighborhood(seg, beta, nclasses)
             PVE = com.prob_image(image_gauss, nclasses, mu, sigmasq, PLN)
 
             mu_upd, sigmasq_upd = com.update_param(image_gauss,
@@ -116,7 +121,7 @@ class TissueClassifierHMRF(object):
 
             negll = com.negloglikelihood(image_gauss,
                                          mu_upd, sigmasq_upd, nclasses)
-            final_segmentation, energy = icm.icm_ising(negll, beta, seg_init)
+            final_segmentation, energy = icm.icm_ising(negll, beta, seg)
 
             if allow_break:
                 energy_sum.append(float(energy[energy > -xp.inf].sum()))
@@ -125,7 +130,10 @@ class TissueClassifierHMRF(object):
                 self.segmentations.append(final_segmentation)
                 self.pves.append(PVE)
                 self.energies.append(energy)
-                self.energies_sum.append(energy[energy > -xp.inf].sum())
+                if allow_break:
+                    self.energies_sum.append(energy_sum[-1])
+                else:
+                    self.energies_sum.append(float(energy[energy > -xp.inf].sum()))
 
             if allow_break and i > 5:
 
@@ -138,10 +146,11 @@ class TissueClassifierHMRF(object):
                 if test_dist < tol:
                     break
 
-            seg_init = final_segmentation
+            seg = final_segmentation
             mu = mu_upd
             sigmasq = sigmasq_upd
 
-        PVE = PVE[..., 1:]
+        PVE = PVE[1:, ...]
+        PVE = xp.moveaxis(PVE, 0, -1)
 
         return initial_segmentation, final_segmentation, PVE

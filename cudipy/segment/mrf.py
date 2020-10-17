@@ -77,8 +77,8 @@ class ConstantObservationModel(object):
 
         """
         xp = get_array_module(input_image)
-        mu = xp.zeros(nclass)
-        std = xp.zeros(nclass)
+        mu = xp.zeros(nclass, dtype=input_image.dtype)
+        std = xp.zeros(nclass, dtype=input_image.dtype)
         for i in range(nclass):
             v = input_image[seg_image == i]
             if v.size > 0:
@@ -111,10 +111,10 @@ class ConstantObservationModel(object):
         """
         xp = get_array_module(image)
         float_dtype = xp.promote_types(image.dtype, np.float32)
-        nloglike = xp.zeros(image.shape + (nclasses,), dtype=float_dtype)
+        nloglike = xp.zeros((nclasses,) + image.shape, dtype=float_dtype)
 
         for l in range(nclasses):
-            nloglike[..., l] = _negloglikelihood(image, mu[l], sigmasq[l])
+            nloglike[l, ...] = _negloglikelihood(image, mu[l], sigmasq[l])
 
         return nloglike
 
@@ -145,16 +145,16 @@ class ConstantObservationModel(object):
         xp = get_array_module(img)
         P_L_Y = xp.zeros_like(P_L_N)
         P_L_Y_norm = xp.zeros_like(img)
+        out = xp.zeros_like(img)
 
         for l in range(nclasses):
-
-            P_L_Y[..., l] = _prob_image(img, mu[l], sigmasq[l], P_L_N[..., l])
-            P_L_Y_norm += P_L_Y[..., l]
+            P_L_Y[l] = _prob_image(img, mu[l], sigmasq[l], P_L_N[l])
+            P_L_Y_norm += P_L_Y[l]
 
         # TODO: why is this guard needed here, but not in the CPU case?
         P_L_Y_norm[P_L_Y_norm == 0] = 1  # avoid divide by 0
 
-        P_L_Y /= P_L_Y_norm[..., np.newaxis]
+        P_L_Y /= P_L_Y_norm[np.newaxis, ...]
 
         return P_L_Y
 
@@ -190,13 +190,19 @@ class ConstantObservationModel(object):
         mu_upd = xp.zeros(nclasses, dtype=float_dtype)
         var_upd = xp.zeros(nclasses, dtype=float_dtype)
 
-        for l in range(nclasses):
-            mu_num = P_L_Y[..., l] * image
-            var_num = image - mu[l]
+        # fuse simple computations to reduce kernel launch overhead
+        @cp.fuse()
+        def _helper(image, mu, p_l_y):
+            var_num = image - mu
             var_num *= var_num
-            var_num *= P_L_Y[..., l]
+            var_num *= p_l_y
+            return var_num
 
-            denom = xp.sum(P_L_Y[..., l])
+        for l in range(nclasses):
+            mu_num = P_L_Y[l] * image
+            var_num = _helper(image, mu[l], P_L_Y[l])
+
+            denom = xp.sum(P_L_Y[l])
             mu_upd[l] = xp.sum(mu_num) / denom
             var_upd[l] = xp.sum(var_num) / denom
 
@@ -204,46 +210,79 @@ class ConstantObservationModel(object):
 
 
 # TODO: use np.finfo(imaged.dtype).eps instead of hardcoded values below?
-# TODO: use ElementWise Kernel for better efficiency
 def _negloglikelihood(image, mu, sigmasq):
     xp = get_array_module(image)
     eps = 1e-8  # We assume images normalized to 0-1
     eps_sq = 1e-16  # Maximum precision for double.
     float_dtype = np.promote_types(image.dtype, np.float32)
-    var = float(sigmasq)
-    if var < eps_sq:
+    var = sigmasq
+    fvar = float(var)  # host scalar
+    c = math.log(math.sqrt(2.0 * np.pi * fvar))
+
+    if fvar < eps_sq:
         neglog = xp.empty(image.shape, dtype=float_dtype)
         small_mask = xp.abs(image - mu) < eps
-        neglog[small_mask] = 1 + math.log(math.sqrt(2.0 * np.pi * var))
+        neglog[small_mask] = 1 + c
         neglog[~small_mask] = np.inf
     else:
-        neglog = image - mu
-        neglog *= neglog
-        neglog /= 2 * var
-        neglog += math.log(math.sqrt(2.0 * np.pi * var))
+
+        # fuse simple computations to reduce kernel launch overhead
+        @cp.fuse()
+        def _helper(image, mu, var, c):
+            neglog = image - mu
+            neglog *= neglog
+            neglog /= 2.0 * var
+            neglog += c
+            return neglog
+
+        neglog = _helper(image, mu, var, c)
+
     return neglog
 
 
+_gaussian_kern = cp.ElementwiseKernel(
+    in_params="W image, W mu, W var, P prob",
+    out_params="W out",
+    operation="""
+    out = image - mu;
+    out *= out;
+    out /= 2.0 * var;
+    out = exp(-out);
+    out /= sqrt(2.0 * M_PI * var);
+    out *= prob;
+    """,
+    name="cudipy_gaussian_kernel",
+)
+
+
 # TODO: use np.finfo(imaged.dtype).eps instead of hardcoded values below?
-# TODO: use ElementWise Kernel for better efficiency
-def _prob_image(image, mu, sigmasq, P_L_N):
+def _prob_image(image, mu, sigmasq, P_L_N, out=None):
     xp = get_array_module(image)
     eps = 1e-8  # We assume images normalized to 0-1
     eps_sq = 1e-16  # Maximum precision for double.
     float_dtype = np.promote_types(image.dtype, np.float32)
-    var = float(sigmasq)
-    if var < eps_sq:
-        gaussian = xp.zeros(image.shape, dtype=float_dtype)
+    var = sigmasq
+    fvar = float(var)  # host scalar version of var
+    if out is not None:
+        if out.shape != image.shape:
+            raise ValueError("out must have the same shape as image")
+        if out.dtype != image.dtype:
+            raise ValueError("out must have the same dtype as image")
+    if fvar < eps_sq:
+        if out is None:
+            gaussian = xp.zeros(image.shape, dtype=float_dtype)
+        else:
+            gaussian = out
+            gaussian[...] = 0
         small_mask = xp.abs(image - mu) < eps
-        gaussian[small_mask] = 1
+        gaussian[small_mask] = P_L_N[small_mask]
     else:
-        gaussian = image - mu
-        gaussian *= gaussian
-        gaussian /= 2 * var
-        gaussian = xp.exp(-gaussian)
-        gaussian /= math.sqrt(2 * np.pi * var)
-
-    return gaussian * P_L_N
+        if out is None:
+            gaussian = xp.empty_like(image)
+        else:
+            gaussian = out
+        _gaussian_kern(image, mu, var, P_L_N, gaussian)
+    return gaussian
 
 
 class IteratedConditionalModes(object):
@@ -270,9 +309,8 @@ class IteratedConditionalModes(object):
         seg : ndarray
             3D initial segmentation
         """
-        return nloglike.argmin(axis=-1).astype(np.int16)
+        return nloglike.argmin(axis=0).astype(np.int16)
 
-    # TODO: create custom kernel similar to _icm_ising for better efficiency
     def icm_ising(self, nloglike, beta, seg):
         r""" Executes one iteration of the ICM algorithm for MRF MAP
         estimation. The prior distribution of the MRF is a Gibbs
@@ -301,12 +339,12 @@ class IteratedConditionalModes(object):
         """
         xp = get_array_module(nloglike)
 
-        nclasses = nloglike.shape[-1]
+        nclasses = nloglike.shape[0]
 
         float_dtype = xp.promote_types(
-            seg.dtype, np.float32
+            nloglike.dtype, np.float32
         )  # Note: use float64 as in Dipy?
-        energies = xp.empty(nloglike.shape).astype(float_dtype)
+        energies = xp.empty(nloglike.shape, dtype=float_dtype)
 
         p_l_n = xp.empty(seg.shape, dtype=float_dtype)
 
@@ -316,10 +354,20 @@ class IteratedConditionalModes(object):
 
         for classid in range(nclasses):
             prob_kernel(seg, icm_weights, classid, p_l_n)
-            energies[..., classid] = p_l_n + nloglike[..., classid]
+            energies[classid, ...] = p_l_n + nloglike[classid, ...]
 
-        new_seg = energies.argmin(-1)
-        energy = energies.min(-1)
+        # The code below is equivalent, but more efficient than:
+        #     return energies.argmin(-1), energies.min(-1)
+
+        # reshape to energies to (voxels, classes)
+        vol_shape = energies.shape[1:]
+        energies = energies.reshape(energies.shape[0], -1)
+        argm = energies.argmin(0)
+        # get min using the argmin indices (via advanced indexing)
+        energy = energies[argm, cp.arange(energies.shape[1])]
+        # restore original spatial domain shape
+        new_seg = argm.reshape(vol_shape)
+        energy = energy.reshape(vol_shape)
         return new_seg, energy
 
     def prob_neighborhood(self, seg, beta, nclasses, float_dtype=np.float32):
@@ -352,13 +400,13 @@ class IteratedConditionalModes(object):
         int_type = "size_t" if seg.size > 1 << 31 else "int"
         prob_kernel = _get_icm_prob_class_kernel(icm_weights.shape, int_type)
 
-        PLN = xp.zeros(seg.shape + (nclasses,), dtype=float_dtype)
+        PLN = xp.zeros((nclasses,) + seg.shape, dtype=float_dtype)
 
         for classid in range(nclasses):
             prob_kernel(seg, icm_weights, classid, p_l_n)
             xp.exp(-p_l_n, out=p_l_n)
-            PLN[..., classid] = p_l_n
+            PLN[classid, ...] = p_l_n
 
-        PLN /= PLN.sum(-1, keepdims=True)
+        PLN /= PLN.sum(0, keepdims=True)
 
         return PLN
