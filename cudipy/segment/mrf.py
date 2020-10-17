@@ -46,9 +46,9 @@ class ConstantObservationModel(object):
         -------
         mu : array
             1 x nclasses, mean for each class
-        sigma : array
-            1 x nclasses, standard deviation for each class.
-            Set up to 1.0 for all classes.
+        var : array
+            1 x nclasses, variance for each class.
+            Set to 1.0 for all classes.
         """
         xp = get_array_module(image)
         float_dtype = xp.promote_types(image.dtype, np.float32)
@@ -71,9 +71,9 @@ class ConstantObservationModel(object):
 
         Returns
         -------
-        mu, std : ndarrays
+        mu, var : ndarrays
             1 x nclasses dimension
-            Mean and standard deviation for each class
+            Mean and variance for each class
 
         """
         xp = get_array_module(input_image)
@@ -83,7 +83,7 @@ class ConstantObservationModel(object):
             v = input_image[seg_image == i]
             if v.size > 0:
                 mu[i] = v.mean()
-                std[i] = v.std()
+                std[i] = v.var()
         return mu, std
 
     def negloglikelihood(self, image, mu, sigmasq, nclasses):

@@ -66,22 +66,24 @@ class TissueClassifierHMRF(object):
         com = ConstantObservationModel()
         icm = IteratedConditionalModes()
 
+        if not image.dtype.kind == 'f':
+            image = image.astype(np.promote_types(image.dtype, np.float32))
+
         if image.max() > 1:
             # image = xp.interp(image, [0, image.max()], [0.0, 1.0])
             image = image - image.min()
             image /= image.max()
 
-        mu, sigma = com.initialize_param_uniform(image, nclasses)
+        mu, sigmasq = com.initialize_param_uniform(image, nclasses)
         p = xp.argsort(mu)
         mu = mu[p]
-        sigma = sigma[p]
-        sigmasq = sigma ** 2
+        sigmasq = sigmasq[p]
+        print(f"sigmasq.shape = {sigmasq.shape}")
 
         neglogl = com.negloglikelihood(image, mu, sigmasq, nclasses)
         seg_init = icm.initialize_maximum_likelihood(neglogl)
 
-        mu, sigma = com.seg_stats(image, seg_init, nclasses)
-        sigmasq = sigma ** 2
+        mu, sigmasq = com.seg_stats(image, seg_init, nclasses)
 
         zero = xp.zeros_like(image) + 0.001
         zero_noise = add_noise(zero, 10000, 1, noise_type="gaussian")
@@ -90,7 +92,7 @@ class TissueClassifierHMRF(object):
         final_segmentation = xp.empty_like(image)
         initial_segmentation = seg_init.copy()
 
-        allow_break = not (max_iter is not None and tolerance is None)
+        allow_break = max_iter is None or tolerance is not None
 
         if max_iter is None:
             max_iter = 100
@@ -125,21 +127,20 @@ class TissueClassifierHMRF(object):
                 self.energies.append(energy)
                 self.energies_sum.append(energy[energy > -xp.inf].sum())
 
-            if allow_break and (i % 10 == 0 and i != 0):
+            if allow_break and i > 5:
 
-                tol = tolerance * (np.amax(energy_sum) - np.amin(energy_sum))
+                e_sum = np.asarray(energy_sum)
+                tol = tolerance * (np.amax(e_sum) - np.amin(e_sum))
 
-                test_dist = np.absolute(
-                    np.amax(energy_sum[np.size(energy_sum) - 5: i]) -
-                    np.amin(energy_sum[np.size(energy_sum) - 5: i])
-                )
+                e_end = e_sum[e_sum.size - 5:]
+                test_dist = np.abs(np.amax(e_end) - np.amin(e_end))
 
                 if test_dist < tol:
                     break
 
-            seg_init = final_segmentation.copy()
-            mu = mu_upd.copy()
-            sigmasq = sigmasq_upd.copy()
+            seg_init = final_segmentation
+            mu = mu_upd
+            sigmasq = sigmasq_upd
 
         PVE = PVE[..., 1:]
 
