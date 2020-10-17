@@ -199,7 +199,7 @@ def median_otsu(input_volume, vol_idx=None, median_radius=4, numpass=4,
     xp = get_array_module(input_volume, vol_idx)
     if len(input_volume.shape) == 4:
         if vol_idx is not None:
-            b0vol = xp.mean(input_volume[..., vol_idx], axis=3)
+            b0vol = xp.mean(input_volume[..., xp.asarray(vol_idx)], axis=3)
         else:
             raise ValueError("For 4D images, must provide vol_idx input")
     else:
