@@ -121,7 +121,7 @@ def test_warp(shape):
     Bg = cupy.asarray(B)
     Cg = cupy.asarray(C)
 
-    warped = warp(volumeg, dcopyg, Ag, Bg, Cg, order=1, mode="constant")
+    warped = warp(volumeg, dcopyg, Ag, Bg, Cg, order=1, mode="grid-constant")
 
     cupy.testing.assert_array_almost_equal(warped, expected, decimal=4)
 

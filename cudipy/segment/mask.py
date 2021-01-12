@@ -1,18 +1,15 @@
-
 from warnings import warn
 
 import cupy as cp
-
-from .._utils import get_array_module
-
-
-# median_filter from cupyimg is faster than the cupy one for certain kernel sizes
-from cupyimg.scipy.ndimage.filters import median_filter
-from cupyimg.scipy.ndimage import binary_dilation, generate_binary_structure
+from cupyx.scipy.ndimage.filters import median_filter
+try:
+    from cupyx.scipy.ndimage import binary_dilation, generate_binary_structure
+except ImportError:
+    from cupyimg.scipy.ndimage import (
+        binary_dilation, generate_binary_structure)
 from cupyimg.skimage.filters import threshold_otsu as otsu
 
-# CuPy 9.0 will have binary_dilation and generate_binary_structure
-# from cupyx.scipy.ndimage import binary_dilation, generate_binary_structure
+from .._utils import get_array_module
 
 
 def multi_median(input, median_radius, numpass):

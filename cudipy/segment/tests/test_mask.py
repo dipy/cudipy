@@ -14,10 +14,14 @@ from cudipy.segment.mask import (
     multi_median,
     otsu,
 )
-from cupyimg.scipy.ndimage import binary_dilation, generate_binary_structure
-from cupyimg.scipy.ndimage.filters import median_filter
 from dipy.data import get_fnames
 from dipy.io.image import load_nifti_data
+from cupyx.scipy.ndimage.filters import median_filter
+try:
+    from cupyx.scipy.ndimage import binary_dilation, generate_binary_structure
+except ImportError:
+    from cupyimg.scipy.ndimage import (
+        binary_dilation, generate_binary_structure)
 
 
 def test_mask():

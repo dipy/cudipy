@@ -7,9 +7,12 @@ arrays. All affines, shapes, spacings remain on the CPU for efficiency.
 import logging
 
 import numpy as np
-
 import cupy as cp
-import cupyimg.scipy.ndimage.filters as filters
+try:
+    from cupyx.scipy.ndimage import filters
+except ImportError:
+    from cupyimg.scipy.ndimage import filters
+
 from dipy.align import floating
 
 logger = logging.getLogger(__name__)

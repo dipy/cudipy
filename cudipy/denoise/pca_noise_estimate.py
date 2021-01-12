@@ -5,7 +5,10 @@ import cupyx.scipy.linalg
 
 # import scipy.special as sps
 import cupyx.scipy.special as sps
-from cupyimg.scipy import ndimage as ndi
+try:
+    import cupyx.scipy.ndimage as ndi
+except ImportError:
+    import cupyimg.scipy.ndimage as ndi
 
 
 def pca_noise_estimate(
