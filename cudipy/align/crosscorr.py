@@ -1,8 +1,5 @@
 import cupy as cp
-try:
-    import cupyx.scipy.ndimage as ndi
-except ImportError:
-    import cupyimg.scipy.ndimage as ndi
+import cupyx.scipy.ndimage as ndi
 
 
 _cc_precompute = cp.ElementwiseKernel(

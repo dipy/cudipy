@@ -8,24 +8,10 @@ import logging
 
 import numpy as np
 import cupy as cp
-try:
-    from cupyx.scipy.ndimage import filters
-except ImportError:
-    from cupyimg.scipy.ndimage import filters
-
+from cupyx.scipy.ndimage import filters
 from dipy.align import floating
 
 logger = logging.getLogger(__name__)
-
-if hasattr(cp, 'ptp'):
-    ptp = cp.ptp
-else:
-    # older CuPy doesn't have ptp method
-    def ptp(a):
-        if hasattr(cp, "ptp"):
-            return a.ptp()
-        else:
-            return a.max() - a.min()
 
 
 class ScaleSpace(object):
@@ -73,7 +59,7 @@ class ScaleSpace(object):
             mask = cp.asarray(image > 0, dtype=np.int32)
 
         # Normalize input image to [0,1]
-        img = (image - image.min()) / ptp(image)
+        img = (image - image.min()) / cp.ptp(image)
         if mask0:
             img *= mask
 
@@ -126,7 +112,7 @@ class ScaleSpace(object):
 
             # Filter along each direction with the appropriate sigma
             filtered = filters.gaussian_filter(image, sigmas)
-            filtered = (filtered - filtered.min()) / ptp(filtered)
+            filtered = (filtered - filtered.min()) / cp.ptp(filtered)
             if mask0:
                 filtered *= mask
 
@@ -384,7 +370,7 @@ class IsotropicScaleSpace(ScaleSpace):
             mask = cp.asarray(image > 0, dtype=np.int32)
 
         # Normalize input image to [0,1]
-        img = (image.astype(cp.float64) - image.min()) / ptp(image)
+        img = (image.astype(cp.float64) - image.min()) / cp.ptp(image)
         if mask0:
             img *= mask
 
@@ -443,7 +429,7 @@ class IsotropicScaleSpace(ScaleSpace):
             filtered = filters.gaussian_filter(
                 image.astype(np.float64), new_sigmas
             )
-            filtered = (filtered.astype(np.float64) - filtered.min()) / ptp(
+            filtered = (filtered.astype(np.float64) - filtered.min()) / cp.ptp(
                 filtered
             )
             if mask0:

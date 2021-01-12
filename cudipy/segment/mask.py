@@ -2,14 +2,20 @@ from warnings import warn
 
 import cupy as cp
 from cupyx.scipy.ndimage.filters import median_filter
-try:
-    from cupyx.scipy.ndimage import binary_dilation, generate_binary_structure
-except ImportError:
-    from cupyimg.scipy.ndimage import (
-        binary_dilation, generate_binary_structure)
-from cupyimg.skimage.filters import threshold_otsu as otsu
+from cupyx.scipy.ndimage import binary_dilation, generate_binary_structure
+
 
 from .._utils import get_array_module
+
+_otsu_available = False
+
+try:
+    from cupyimg.skimage.filters import threshold_otsu as otsu
+    _otsu_available = True
+except ImportError:
+
+    def otsu(*args, **kwargs):
+        raise ImportError("cupyimg is required to use otsu")
 
 
 def multi_median(input, median_radius, numpass):
@@ -193,6 +199,8 @@ def median_otsu(input_volume, vol_idx=None, median_radius=4, numpass=4,
     IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
     POSSIBILITY OF SUCH DAMAGE.
     """
+    if not _otsu_available:
+        raise ImportError("cupyimg is required to use median_otsu")
     xp = get_array_module(input_volume, vol_idx)
     if len(input_volume.shape) == 4:
         if vol_idx is not None:

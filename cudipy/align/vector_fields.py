@@ -1,12 +1,9 @@
 import numpy as np
 
 import cupy
-try:
-    import cupyx.scipy.ndimage as ndi
-except ImportError:
-    import cupyimg.scipy.ndimage as ndi
+from cupy import memoize
+import cupyx.scipy.ndimage as ndi
 
-from cupyimg import memoize
 
 # TODO: can generalize the following to nd using string templates
 # Note: x, y, z be sparse coordinate arrays as returned by meshgrid with

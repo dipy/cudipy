@@ -3,12 +3,8 @@ import numpy as np
 import cupy as cp
 import cupyx.scipy.linalg
 
-# import scipy.special as sps
+import cupyx.scipy.ndimage as ndi
 import cupyx.scipy.special as sps
-try:
-    import cupyx.scipy.ndimage as ndi
-except ImportError:
-    import cupyimg.scipy.ndimage as ndi
 
 
 def pca_noise_estimate(
