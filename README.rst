@@ -23,17 +23,10 @@ Requirements
 ============
 The following requirements should be installed prior to installing cuDIPY.
 
-numpy >= 1.15
-cupy >= 8.0
-cupyimg
+numpy >= 1.17
+cupy >= 9.0.0b1 (targeting CuPy 9.0 release in April 2021)
 nibabel >= 3.0.0
-scipy >= 1.0
-
-cupyimg currently is not on PyPI and should be installed after CuPy directly
-from its repository via::
-
-    pip install git+https://github.com/mritools/cupyimg
-
+scipy >= 1.1
 
 Installing cuDIPY
 =================
