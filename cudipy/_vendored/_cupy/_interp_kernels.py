@@ -1,3 +1,6 @@
+"""
+vendored copy of cupyx/scipy/ndimage/_interp_kernels.py
+"""
 import numpy
 
 import cupy

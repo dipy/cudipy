@@ -1,3 +1,6 @@
+"""
+vendored copy of cupyx/scipy/ndimage/_util.py
+"""
 import cupy
 
 
