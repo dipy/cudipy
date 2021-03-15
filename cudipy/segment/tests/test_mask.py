@@ -93,6 +93,7 @@ def test_bounding_box():
         assert_equal(maxs, [0, 0])
 
 
+@cp.testing.with_requires('cupyimg')
 def test_median_otsu():
     fname = get_fnames('S0_10')
     data = load_nifti_data(fname)
