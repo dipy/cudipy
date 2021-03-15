@@ -200,9 +200,9 @@ def _compute_cc_step(
             axes = range(1, ndim + 1)
         for ax in axes:
             slices[ax] = slice(0, radius)
-            result[slices] = 0
+            result[tuple(slices)] = 0
             slices[ax] = slice(-radius, None)
-            result[slices] = 0
+            result[tuple(slices)] = 0
             slices[ax] = slice(None)
     return result, energy
 
