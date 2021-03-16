@@ -1,7 +1,7 @@
 import numpy
 
 import cupy
-from cudipy.segment._cupy import _filters_core
+from cudipy._vendored._cupy import _filters_core
 
 
 @cupy.memoize()

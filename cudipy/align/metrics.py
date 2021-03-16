@@ -4,19 +4,10 @@ import abc
 
 import cupy as cp
 
-# from cupyimg.dipy.align import sumsqdiff as ssd
 from cudipy.align import crosscorr as cc
 from cudipy.align import floating
 from cudipy.align import vector_fields as vfu
 from cupyx.scipy import ndimage
-
-if hasattr(cp, 'gradient'):
-    gradient = cp.gradient
-else:
-    # older CuPy does not have gradient implemented
-    from cupyimg.numpy import gradient
-
-# from cudipy.align import expectmax as em
 
 
 class SimilarityMetric(object, metaclass=abc.ABCMeta):
@@ -267,14 +258,14 @@ class CCMetric(SimilarityMetric):
                 shape=(self.moving_image.shape) + (self.dim,), dtype=floating
             )
 
-            for i, grad in enumerate(gradient(self.moving_image)):
+            for i, grad in enumerate(cp.gradient(self.moving_image)):
                 self.gradient_moving[..., i] = grad
         else:
             self.gradient_moving = cp.empty(
                 shape=(self.dim,) + (self.moving_image.shape), dtype=floating
             )
 
-            for i, grad in enumerate(gradient(self.moving_image)):
+            for i, grad in enumerate(cp.gradient(self.moving_image)):
                 self.gradient_moving[i] = grad
 
         # Convert moving image's gradient field from voxel to physical space
@@ -293,13 +284,13 @@ class CCMetric(SimilarityMetric):
             self.gradient_static = cp.empty(
                 shape=(self.static_image.shape) + (self.dim,), dtype=floating
             )
-            for i, grad in enumerate(gradient(self.static_image)):
+            for i, grad in enumerate(cp.gradient(self.static_image)):
                 self.gradient_static[..., i] = grad
         else:
             self.gradient_static = cp.empty(
                 shape=(self.dim,) + (self.static_image.shape), dtype=floating
             )
-            for i, grad in enumerate(gradient(self.static_image)):
+            for i, grad in enumerate(cp.gradient(self.static_image)):
                 self.gradient_static[i] = grad
 
         # Convert moving image's gradient field from voxel to physical space

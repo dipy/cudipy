@@ -1397,9 +1397,9 @@ class SymmetricDiffeomorphicRegistration(DiffeomorphicRegistration):
             axes = range(1, self.dim + 1)
         for ax in axes:
             slices[ax] = slice(0, 1)
-            step[slices] = 0
+            step[tuple(slices)] = 0
             slices[ax] = slice(-1, None)
-            step[slices] = 0
+            step[tuple(slices)] = 0
             slices[ax] = slice(None)
         # step[0, ...] = 0
         # step[:, 0, ...] = 0

@@ -4,9 +4,6 @@ import numpy as np
 
 import cupy as cp
 from cupyx.scipy import ndimage as ndi
-if not hasattr(ndi, 'binary_erosion'):
-    # older CuPy does not have binary_erosion, so import from cupyimg instead
-    from cupyimg.scipy import ndimage as ndi
 
 
 def estimate_sigma(arr, disable_background_masking=False, N=0):

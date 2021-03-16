@@ -1,8 +1,9 @@
 import numpy as np
 
 import cupy
-import cupyimg.scipy.ndimage as ndi
-from cupyimg import memoize
+from cupy import memoize
+import cupyx.scipy.ndimage as ndi
+
 
 # TODO: can generalize the following to nd using string templates
 # Note: x, y, z be sparse coordinate arrays as returned by meshgrid with
@@ -482,18 +483,10 @@ def compose_vector_fields(
             )
             Y += d1tmp
 
-    from cupyimg.scipy.ndimage._kernels import interp
-
-    # TODO: things outside the domain should be set to zero
-    legacy_mode_pre = interp.const_legacy_mode
-    try:
-        interp.const_legacy_mode = True
-        if Z is None:
-            Z = cupy.empty_like(Y)
-        for n in range(ndim):
-            Z[n, ...] = ndi.map_coordinates(d2[n], Y, order=1, mode="constant")
-    finally:
-        interp.const_legacy_mode = legacy_mode_pre
+    if Z is None:
+        Z = cupy.empty_like(Y)
+    for n in range(ndim):
+        Z[n, ...] = ndi.map_coordinates(d2[n], Y, order=1, mode="constant")
 
     if coord_axis == 0:
         res = comp
@@ -1072,37 +1065,31 @@ def down2_even(arr, axes=None, out=None):
 
 def transform_affine(volume, ref_shape, affine, order=1):
 
-    from cupyimg.scipy.ndimage._kernels import interp
-
     ndim = volume.ndim
-    legacy_mode = interp.const_legacy_mode
-    interp.const_legacy_mode = False
-    try:
-        affine = cupy.asarray(affine)
-        if True:
-            out = ndi.affine_transform(
-                volume,
-                matrix=affine,
-                order=order,
-                mode="constant",
-                output_shape=tuple(ref_shape),
-            )
-        else:
-            # use map_coordinates instead of affine_transform
-            xcoords = cupy.meshgrid(
-                *[cupy.arange(s, dtype=volume.dtype) for s in ref_shape],
-                indexing="ij",
-                sparse=True,
-            )
-            coords = _apply_affine_to_field(
-                xcoords,
-                affine[:ndim, :],
-                include_translations=True,
-                coord_axis=0,
-            )
-            out = ndi.map_coordinates(volume, coords, order=1)
-    finally:
-        interp.const_legacy_mode = legacy_mode
+    affine = cupy.asarray(affine)
+    if True:
+        out = ndi.affine_transform(
+            volume,
+            matrix=affine,
+            order=order,
+            mode="constant",
+            output_shape=tuple(ref_shape),
+        )
+    else:
+        # use map_coordinates instead of affine_transform
+        xcoords = cupy.meshgrid(
+            *[cupy.arange(s, dtype=volume.dtype) for s in ref_shape],
+            indexing="ij",
+            sparse=True,
+        )
+        coords = _apply_affine_to_field(
+            xcoords,
+            affine[:ndim, :],
+            include_translations=True,
+            coord_axis=0,
+        )
+        out = ndi.map_coordinates(volume, coords, order=1)
+
     return out
 
 
@@ -1167,7 +1154,7 @@ def resample_displacement_field(
     return output
 
 
-def _get_coord_dual_affine_grad(ndim):
+def _get_coord_dual_affine_grad(ndim, nprepad):
     """Compute target coordinate as in dipy.align.vector_fields.gradient_3d
 
     The homogeneous matrix has shape (ndim, ndim + 1). It corresponds to
@@ -1195,6 +1182,8 @@ def _get_coord_dual_affine_grad(ndim):
         c_1 = mat[3] * tmp_0 + mat[4] * tmp_1 + aff[5];
 
     """
+    if nprepad != 0:
+        raise NotImplementedError("nprepad not implemented")
     ops = []
     ncol = ndim + 1
     for j in range(ndim):
@@ -1262,12 +1251,12 @@ def _get_coord_dual_affine_grad(ndim):
 def _get_grad_kernel(
     ndim, large_int, yshape, mode, cval=0.0, order=1, integer_output=False
 ):
-    from cupyimg.scipy.ndimage._kernels.interp import _generate_interp_custom
+    from cudipy._vendored._cupy._interp_kernels import _generate_interp_custom
 
     in_params = "raw X x, raw W mat, raw W mat2, raw W dx"
     out_params = "Y y, raw I inside"
     operation, name = _generate_interp_custom(
-        in_params=in_params,
+        # in_params=in_params,
         coord_func=_get_coord_dual_affine_grad,
         ndim=ndim,
         large_int=large_int,
@@ -1281,7 +1270,7 @@ def _get_grad_kernel(
     return cupy.ElementwiseKernel(in_params, out_params, operation, name)
 
 
-def _get_coord_dual_affine_sparse_grad(ndim):
+def _get_coord_dual_affine_sparse_grad(ndim, nprepad):
     """Compute target coordinate as in dipy.align.vector_fields.gradient_3d
 
     The homogeneous matrix has shape (ndim, ndim + 1). It corresponds to
@@ -1309,6 +1298,8 @@ def _get_coord_dual_affine_sparse_grad(ndim):
         c_1 = mat[3] * tmp_0 + mat[4] * tmp_1 + aff[5];
 
     """
+    if nprepad != 0:
+        raise NotImplementedError("nprepad not implemented")
     ops = []
     ncol = ndim + 1
     ops.append("ptrdiff_t ncoords = _ind.size();")
@@ -1357,12 +1348,12 @@ def _get_coord_dual_affine_sparse_grad(ndim):
 def _get_sparse_grad_kernel(
     ndim, large_int, yshape, mode, cval=0.0, order=1, integer_output=False
 ):
-    from cupyimg.scipy.ndimage._kernels.interp import _generate_interp_custom
+    from cudipy._vendored._cupy._interp_kernels import _generate_interp_custom
 
     in_params = "raw X x, raw W mat, raw W coords, raw W dx"
     out_params = "Y y, raw I inside"
     operation, name = _generate_interp_custom(
-        in_params=in_params,
+        # in_params=in_params,
         coord_func=_get_coord_dual_affine_sparse_grad,
         ndim=ndim,
         large_int=large_int,
@@ -1443,9 +1434,6 @@ def sparse_gradient(
     coord_axis=-1,
 ):
     # TODO: use inside?
-    from cupyimg.scipy.ndimage._kernels import interp
-
-    interp.const_legacy_mode = True
     ndim = img.ndim
     large_int = False
     grad_kernel = _get_sparse_grad_kernel(

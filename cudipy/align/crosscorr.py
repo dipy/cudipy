@@ -1,5 +1,5 @@
 import cupy as cp
-from cupyimg._misc import convolve_separable
+import cupyx.scipy.ndimage as ndi
 
 
 _cc_precompute = cp.ElementwiseKernel(
@@ -16,6 +16,47 @@ _cc_precompute = cp.ElementwiseKernel(
     """,
     name="cudipy_cc_precompute",
 )
+
+
+def convolve_separable(x, w, axes=None, **kwargs):
+    """n-dimensional convolution via separable application of convolve1d
+
+    Parameters
+    ----------
+    x : cupy.ndarray
+        The input array.
+    w : cupy.ndarray or sequence of cupy.ndarray
+        If a single array is given, this same filter will be applied along
+        all axes. A sequence of arrays can be provided in order to apply a
+        separate filter along each axis. In this case the length of ``w`` must
+        match the number of axes filtered.
+    axes : tuple of int or None
+        The axes of ``x`` to be filtered. The default (None) is to filter all
+        axes of ``x``.
+
+    Returns
+    -------
+    out : cupy.ndarray
+        The filtered array.
+
+    """
+    if axes is None:
+        axes = range(x.ndim)
+    axes = tuple(axes)
+    ndim = x.ndim
+    if any(ax < -ndim or ax > ndim - 1 for ax in axes):
+        raise ValueError("axis out of range")
+
+    if isinstance(w, cp.ndarray):
+        w = [w] * len(axes)
+    elif len(w) != len(axes):
+        raise ValueError("user should supply one filter per axis")
+
+    for ax, w0 in zip(axes, w):
+        if not isinstance(w0, cp.ndarray) or w0.ndim != 1:
+            raise ValueError("w must be a 1d array (or sequence of 1d arrays)")
+        x = ndi.convolve1d(x, w0, axis=ax, **kwargs)
+    return x
 
 
 def precompute_cc_factors(ad, bd, radius, mode="constant"):
@@ -159,9 +200,9 @@ def _compute_cc_step(
             axes = range(1, ndim + 1)
         for ax in axes:
             slices[ax] = slice(0, radius)
-            result[slices] = 0
+            result[tuple(slices)] = 0
             slices[ax] = slice(-radius, None)
-            result[slices] = 0
+            result[tuple(slices)] = 0
             slices[ax] = slice(None)
     return result, energy
 

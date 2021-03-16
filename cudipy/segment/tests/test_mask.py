@@ -12,15 +12,16 @@ from cudipy.segment.mask import (
     crop,
     median_otsu,
     multi_median,
-    otsu,
 )
-from cupyimg.scipy.ndimage import binary_dilation, generate_binary_structure
-from cupyimg.scipy.ndimage.filters import median_filter
 from dipy.data import get_fnames
 from dipy.io.image import load_nifti_data
+from cupyx.scipy.ndimage.filters import median_filter
+from cupyx.scipy.ndimage import binary_dilation, generate_binary_structure
 
 
+@cp.testing.with_requires('cupyimg')
 def test_mask():
+    from cudipy.segment.mask import otsu
     vol = cp.zeros((30, 30, 30))
     vol[15, 15, 15] = 1
     struct = generate_binary_structure(3, 1)
@@ -92,6 +93,7 @@ def test_bounding_box():
         assert_equal(maxs, [0, 0])
 
 
+@cp.testing.with_requires('cupyimg')
 def test_median_otsu():
     fname = get_fnames('S0_10')
     data = load_nifti_data(fname)
